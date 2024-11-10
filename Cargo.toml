@@ -8,3 +8,5 @@ actix-web = "4.9.0"
 chrono = "0.4.38"
 dotenv = "0.15.0"
 serde = { version = "1.0.214", features = ["derive"] }
+tokio = { version = "1.41.1", features = ["full"] }
+sqlx = { version = "0.8.2", features = ["postgres", "runtime-tokio-native-tls"] }
