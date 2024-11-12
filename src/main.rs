@@ -21,6 +21,7 @@ async fn main() -> std::io::Result<()> {
            App::new()
            .app_data(web::Data::new(pool.clone()))
            .service(api::healthcheck::health_check)
+           .service(api::auth::signup)
     })
     .bind(format!("localhost:{}", port))?
     .run()
