@@ -1,4 +1,5 @@
-use chrono::{Utc};
+use chrono::Utc;
+use serde_json::json;
 use diesel::prelude::*;
 use diesel::associations::HasTable;
 use bcrypt::{hash, verify, DEFAULT_COST};
@@ -53,11 +54,24 @@ pub async fn signin(
             if verify(&data.password, &user.password).unwrap_or(false) {
                 
                 let expiration = 3600;
-                // let claims = Claims {
-                //     sub: user.email.clone(),
-                //     exp: (Utc::now().timestamp() + expiration) as usize,
-                // };
+                let claims = Claims {
+                    sub: user.email.clone(),
+                    exp: (Utc::now().timestamp() + expiration) as usize,
+                };
 
+                let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+
+                let encoding_key = EncodingKey::from_secret(secret.as_ref());
+                let token = encode(&Header::default(), &claims, &encoding_key);
+
+                match token {
+                    Ok(t) => {
+                        HttpResponse::Ok().json(json!({ "token": t }));
+                    }
+                    Err(_) => {
+                        HttpResponse::InternalServerError().body("Failed to create token");
+                    }
+                }
                 HttpResponse::Ok().body("Signin successful")
             } else {
                 HttpResponse::Unauthorized().body("Invalid email or password")
