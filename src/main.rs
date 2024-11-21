@@ -1,4 +1,5 @@
 use std::env;
+use env_logger;
 use dotenv::dotenv;
 use actix_web::{web, App, HttpServer};
 
@@ -10,6 +11,9 @@ mod schema;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+
+    env_logger::init();
+    
     dotenv().ok();
 
     let pool = config::db::db_connect();
