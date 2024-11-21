@@ -10,12 +10,14 @@ use actix_web::{post, web, HttpResponse, Responder};
 use crate::types::auth::{SigninData, SignupData, Claims};
 use crate::{config::db::DbPool, models::user::{User, NewUser}};
 
+// signup controller 
 #[post("/signup")]
 pub async fn signup(
     pool: web::Data<DbPool>, 
     data: web::Json<SignupData>
 ) -> impl Responder {
 
+    //  Validate the input data
     match data.validate() {
         Ok(_) => {
         }
@@ -27,10 +29,31 @@ pub async fn signup(
         }
     }
 
+    // Establish a database connection from the connection pool
     let conn = &mut pool.get().expect("Failed to get DB connection");
 
+    // Check if the user already exists based on email
+    let existing_user = users
+        .filter(email.eq(&data.email))
+        .first::<User>(conn);
+
+    match existing_user {
+        Ok(_) => {
+             // If the user exists, return a BadRequest with a message
+            return HttpResponse::BadRequest().json(json!({
+                "error": "User already exists",
+                "message": "A user with this email already exists."
+            }));
+        }
+        Err(_) => {
+            // If no user exists, continue to the next steps
+        }
+    }
+
+    //  Hash the user's password before saving it to the database
     let hash_password = hash(&data.password, DEFAULT_COST).unwrap();
 
+    // Create a new user struct for insertion
     let new_user = NewUser {
         username: &data.username,
         email: &data.email,
@@ -38,6 +61,7 @@ pub async fn signup(
         is_login: Some(false),
     };
 
+    // Insert the new user into the users table
     match diesel::insert_into(users::table())
     .values(&new_user)
     .execute(conn)
@@ -48,7 +72,7 @@ pub async fn signup(
 
 }
 
-
+// signin controller 
 #[post("/signin")]
 pub async fn signin(
     pool: web::Data<DbPool>,
