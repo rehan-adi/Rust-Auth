@@ -1,6 +1,7 @@
 use chrono::Utc;
 use serde_json::json;
 use diesel::prelude::*;
+use validator::Validate;
 use diesel::associations::HasTable;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey};
@@ -14,6 +15,17 @@ pub async fn signup(
     pool: web::Data<DbPool>, 
     data: web::Json<SignupData>
 ) -> impl Responder {
+
+    match data.validate() {
+        Ok(_) => {
+        }
+        Err(validation_errors) => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid input",
+                "details": validation_errors
+            }));
+        }
+    }
 
     let conn = &mut pool.get().expect("Failed to get DB connection");
 
