@@ -1,5 +1,6 @@
 use chrono::Utc;
 use serde_json::json;
+use log::{error, info};
 use diesel::prelude::*;
 use validator::Validate;
 use diesel::associations::HasTable;
@@ -22,6 +23,7 @@ pub async fn signup(
         Ok(_) => {
         }
         Err(validation_errors) => {
+            error!("Validation failed for signup: {:?}", validation_errors);
             return HttpResponse::BadRequest().json(json!({
                 "error": "Invalid input",
                 "details": validation_errors
@@ -39,7 +41,8 @@ pub async fn signup(
 
     match existing_user {
         Ok(_) => {
-             // If the user exists, return a BadRequest with a message
+            // If the user exists, return a BadRequest with a message
+            info!("User already exists with email: {}", &data.email);
             return HttpResponse::BadRequest().json(json!({
                 "error": "User already exists",
                 "message": "A user with this email already exists."
@@ -47,6 +50,7 @@ pub async fn signup(
         }
         Err(_) => {
             // If no user exists, continue to the next steps
+            info!("No existing user with email: {}", &data.email);
         }
     }
 
@@ -66,11 +70,20 @@ pub async fn signup(
     .values(&new_user)
     .execute(conn)
 {
-    Ok(_) => HttpResponse::Created().body("User created successfully"),
-    Err(_) => HttpResponse::InternalServerError().body("Error creating user"),
+    Ok(_) => {
+        info!("User created successfully with email: {}", &data.email);
+        HttpResponse::Created().body("User created successfully")
+    }
+    Err(err) => {
+        error!("Error inserting user into database: {:?}", err);
+        HttpResponse::InternalServerError().json(json!( {
+            "error": "Error creating user",
+            "message": "An error occurred while creating the user."
+        }))
+    }
+  }
 }
 
-}
 
 // signin controller 
 #[post("/signin")]
