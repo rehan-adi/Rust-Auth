@@ -92,43 +92,70 @@ pub async fn signin(
     data: web::Json<SigninData>
 ) -> impl Responder {
 
-    let conn = &mut pool.get().expect("Failed to get DB connection");
-    
-    let result = users
-    .filter(email.eq(&data.email))
-    .first::<User>(conn);
-
-    match result {
-        Ok(user) => {
-            if verify(&data.password, &user.password).unwrap_or(false) {
-                
-                let expiration = 3600;
-                let claims = Claims {
-                    sub: user.email.clone(),
-                    exp: (Utc::now().timestamp() + expiration) as usize,
-                };
-
-                let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-
-                let encoding_key = EncodingKey::from_secret(secret.as_ref());
-                let token = encode(&Header::default(), &claims, &encoding_key);
-
-                match token {
-                    Ok(t) => {
-                        HttpResponse::Ok().json(json!({ "token": t }));
-                    }
-                    Err(_) => {
-                        HttpResponse::InternalServerError().body("Failed to create token");
-                    }
-                }
-                HttpResponse::Ok().body("Signin successful")
-            } else {
-                HttpResponse::Unauthorized().body("Invalid email or password")
-            }
+    match data.validate() {
+        Ok(_) => {
         }
-        Err(_) => {
-            HttpResponse::NotFound().body("User not found")
+        Err(error) => {
+            error!("Validation failed for signup: {:?}", error);
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid input",
+                "details": error
+            }));
         }
     }
 
+    let conn = &mut pool.get().expect("Failed to get DB connection");
+
+    let user = match users.filter(email.eq(&data.email)).first::<User>(conn) {
+        Ok(user) => user,
+        Err(diesel::result::Error::NotFound) => {
+            error!("No user found with email: {}", data.email);
+            return HttpResponse::Unauthorized().body("Invalid email or password");
+        }
+        Err(err) => {
+            error!("Database error while querying user: {:?}", err);
+            return HttpResponse::InternalServerError().body("Database error");
+        }
+    };
+
+    match verify(&data.password, &user.password) {
+        Ok(true) => (),
+        Ok(false) => return HttpResponse::Unauthorized().body("Invalid email or password"),
+        Err(err) => {
+            error!("Password verification error: {:?}", err);
+            return HttpResponse::InternalServerError().body("Password verification failed");
+        }
+    }
+    
+    
+    let expiration = Utc::now() + chrono::Duration::seconds(3600); // 1 hour expiration
+    let claims = Claims {
+        sub: user.email.clone(),
+        exp: expiration.timestamp() as usize,
+    };
+
+    // Get the JWT secret from environment
+    let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+
+    let encoding_key = EncodingKey::from_secret(secret.as_ref());
+    let token = match encode(&Header::default(), &claims, &encoding_key) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("Failed to create JWT token: {:?}", err);
+            return HttpResponse::InternalServerError().body("Failed to create token");
+        }
+    };
+
+    info!("User signed in successfully: {}", user.email);
+    HttpResponse::Ok().json(json!({
+        "message": "Signin successful",
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_login": user.is_login.unwrap_or(false),
+        }
+    }))
+    
 }
