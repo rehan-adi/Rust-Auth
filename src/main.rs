@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
         .service(routes::healthcheck::health_check)
         .service(routes::auth::signup)
         .service(routes::auth::signin)
+        .service(routes::user::get_details)
     })
     .bind(format!("localhost:{}", port))?
     .run()
