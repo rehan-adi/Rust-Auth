@@ -3,10 +3,10 @@ use serde_json::json;
 use log::{error, info};
 use diesel::prelude::*;
 use validator::Validate;
+use crate::schema::users::dsl::*;
 use diesel::associations::HasTable;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey};
-use crate::schema::users::dsl::{users, email};
 use actix_web::{post, web, HttpResponse, Responder};
 use crate::types::auth::{SigninData, SignupData, Claims};
 use crate::{config::db::DbPool, models::user::{User, NewUser}};
@@ -126,7 +126,17 @@ pub async fn signin(
             return HttpResponse::InternalServerError().body("Password verification failed");
         }
     }
-    
+
+    let updated_user = match diesel::update(users.filter(id.eq(user.id)))
+    .set(is_login.eq(true))
+    .get_result::<User>(conn)
+{
+    Ok(user) => user,
+    Err(err) => {
+        error!("Failed to update is_login: {:?}", err);
+        return HttpResponse::InternalServerError().body("Failed to update user login status");
+    }
+};
     
     let expiration = Utc::now() + chrono::Duration::seconds(3600); // 1 hour expiration
     let claims = Claims {
@@ -146,15 +156,15 @@ pub async fn signin(
         }
     };
 
-    info!("User signed in successfully: {}", user.email);
+    info!("User signed in successfully: {}", updated_user.email);
     HttpResponse::Ok().json(json!({
         "message": "Signin successful",
         "token": token,
         "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "is_login": user.is_login.unwrap_or(false),
+            "id": updated_user.id,
+            "username": updated_user.username,
+            "email": updated_user.email,
+            "is_login": updated_user.is_login,
         }
     }))
     
