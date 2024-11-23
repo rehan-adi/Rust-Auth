@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use crate::types::user::UserResponse;
 use actix_web::{get, web, HttpResponse, Responder};
 use crate::{config::db::DbPool, models::user::User, schema::users};
 
@@ -18,7 +19,13 @@ pub async fn get_details(
 
      match user_result {
         Ok(user) => {
-            HttpResponse::Ok().json(user)
+            let user_response = UserResponse {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                is_login: user.is_login,
+            };
+            HttpResponse::Ok().json(user_response)
         }
         Err(diesel::result::Error::NotFound) => {
             HttpResponse::NotFound().body("User not found")
